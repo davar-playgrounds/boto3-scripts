@@ -1,20 +1,18 @@
 import boto3
 import json
+import config
 
-
-region_name = 'us-west-2'
+region_name = config.region_name
 ec2 = boto3.client('ec2', region_name=region_name)
 ecs = boto3.client('ecs', region_name=region_name)
 iam_resource = boto3.resource('iam', region_name=region_name)
 iam_client = boto3.client('iam', region_name=region_name)
 
+image = config.image
+cluster_name = config.cluster_name
+family_name = config.family_name
+family_version = config.family_version
 
-
-
-image = '...'
-
-cluster_name = 'test_cluster3'
-family_name = 'family_name1'
 user_data_script = """#!/bin/bash
 echo ECS_CLUSTER=""" + cluster_name + " >> /etc/ecs/ecs.config"
 
@@ -54,7 +52,7 @@ def register_task_definition():
     return result
 
 
-def run_instances():
+def run_instances(security_group_id):
     response = ec2.run_instances(
         BlockDeviceMappings=[
             {
@@ -71,6 +69,7 @@ def run_instances():
         MaxCount=1,
         MinCount=1,
         UserData=user_data_script,
+        SecurityGroupIds=security_group_id
     )
     instance_id = response['Instances'][0]['InstanceId']
     ec2.create_tags(
@@ -99,27 +98,27 @@ def create_role():
 
     response = iam_client.create_role(
         AssumeRolePolicyDocument=json.dumps(trust_policy),
-        RoleName='RoleFor_AmazonEC2ContainerServiceforEC2Role'
+        RoleName=config.ec2_container_service_role
+    )
+
+    iam_client.attach_role_policy(
+        PolicyArn=config.aws_ec2_container_service_role,
+        RoleName=config.ec2_container_service_role
     )
     return response
 
 
-def attach_role_policy():
-    response = iam_client.attach_role_policy(
-        PolicyArn='arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceforEC2Role',
-        RoleName='RoleFor_AmazonEC2ContainerServiceforEC2Role'
+def create_instance_profile():
+    instance_profile = iam_resource.create_instance_profile(
+        InstanceProfileName=config.ec2_instance_profile,
     )
-    return response
+    return instance_profile
 
 
 def add_role_to_instance_profile():
-    instance_profile = iam_resource.create_instance_profile(
-        InstanceProfileName='InstanceProfileFor_AmazonEC2ContainerServiceforEC2Role',
-    )
-
     response = iam_client.add_role_to_instance_profile(
-        InstanceProfileName='InstanceProfileFor_AmazonEC2ContainerServiceforEC2Role',
-        RoleName='RoleFor_AmazonEC2ContainerServiceforEC2Role'
+        InstanceProfileName=config.ec2_instance_profile,
+        RoleName=config.ec2_container_service_role
     )
     return response
 
@@ -127,7 +126,7 @@ def add_role_to_instance_profile():
 def associate_iam_instance_profile(instance_id):
     response = ec2.associate_iam_instance_profile(
         IamInstanceProfile={
-            'Name': 'InstanceProfileFor_AmazonEC2ContainerServiceforEC2Role'
+            'Name': config.ec2_instance_profile
         },
         InstanceId=instance_id
     )
@@ -136,30 +135,64 @@ def associate_iam_instance_profile(instance_id):
 
 def run_task():
     response = ecs.run_task(
-        taskDefinition=family_name + ':2',
+        taskDefinition=family_name + family_version,
         cluster=cluster_name
     )
     return response
 
 
+def create_security_group():
+    response = ec2.describe_vpcs()
+    vpc_id = response.get('Vpcs', [{}])[0].get('VpcId', '')
+    response = ec2.create_security_group(
+        GroupName=config.security_group_name,
+        VpcId=vpc_id,
+        Description='Security grooup for EC2 instances')
+
+    security_group_id = response['GroupId']
+    print('Security Group Created %s in vpc %s.' % (security_group_id, vpc_id))
+
+    data = ec2.authorize_security_group_ingress(
+        GroupId=security_group_id,
+        IpPermissions=[{
+                'IpProtocol': 'tcp',
+                 'FromPort': 80,
+                 'ToPort': 80,
+                 'IpRanges': [{
+                     'CidrIp': '0.0.0.0/0'
+                 }]
+            },
+            {
+                'IpProtocol': 'tcp',
+                 'FromPort': 22,
+                 'ToPort': 22,
+                 'IpRanges': [{
+                     'CidrIp': '0.0.0.0/0'
+                 }]
+            }
+        ])
+    print('Ingress Successfully Set %s' % data)
+    return security_group_id
 
 
+def setup():
+    print('create_cluster', create_cluster())
+    print('register_task_definition', register_task_definition())
+    security_group_id = create_security_group()
+    print('security_group_id', security_group_id)
+    print('create_role', create_role())
+    print('create_instance_profile', create_instance_profile())
+
+    ###
+
+    #response = run_instances(security_group_id)
+    #instance_id = response['Instances'][0]['InstanceId']
+    #print(instance_id)
+    #print(add_role_to_instance_profile())
+    #print(associate_iam_instance_profile(instance_id))
+    #print(run_task())
+    pass
 
 
-#print(create_cluster())
-#print(register_task_definition())
-
-#response = run_instances()
-#instance_id = response['Instances'][0]['InstanceId']
-#print(instance_id)
-
-#print(create_role())
-#print(attach_role_policy())
-#print(add_role_to_instance_profile())
-
-#print(associate_iam_instance_profile(instance_id))
-
-
-#print(run_task())
-
-
+if __name__ == "__main__":
+    setup()
