@@ -12,6 +12,7 @@ image = config.image
 cluster_name = config.cluster_name
 family_name = config.family_name
 family_version = config.family_version
+instance_name = config.instance_name
 
 user_data_script = """#!/bin/bash
 echo ECS_CLUSTER=""" + cluster_name + " >> /etc/ecs/ecs.config"
@@ -77,7 +78,7 @@ def run_instances(security_group_id):
         Tags=[
             {
                 'Key': 'Name',
-                'Value': 'instance name'
+                'Value': config.instance_name
             },
         ]
     )
@@ -175,22 +176,44 @@ def create_security_group():
     return security_group_id
 
 
-def setup():
+def setup_1():
     print('create_cluster', create_cluster())
     print('register_task_definition', register_task_definition())
     security_group_id = create_security_group()
     print('security_group_id', security_group_id)
     print('create_role', create_role())
     print('create_instance_profile', create_instance_profile())
+    print(add_role_to_instance_profile())
 
-    ###
 
-    #response = run_instances(security_group_id)
-    #instance_id = response['Instances'][0]['InstanceId']
-    #print(instance_id)
-    #print(add_role_to_instance_profile())
-    #print(associate_iam_instance_profile(instance_id))
-    #print(run_task())
+def setup_2():
+    security_group_id = 'sg-024d584ac7fc9ba56'
+    response = run_instances([security_group_id])
+    instance_id = response['Instances'][0]['InstanceId']
+
+    filters = [
+        {
+            'Name': 'Name',
+            'Values': [
+                config.instance_name,
+            ]
+        },
+    ]
+
+    waiter = ec2.get_waiter('instance_running')
+    waiter.wait(
+        InstanceIds=[
+            instance_id,
+        ]
+    )
+
+    print('instance_id: ', instance_id)
+    print(associate_iam_instance_profile(instance_id))
+    print(run_task())
+
+def setup():
+    setup_1()
+    #setup_2()
     pass
 
 

@@ -1,5 +1,6 @@
 import boto3
 import config
+import time
 
 region_name = config.region_name
 ec2 = boto3.client('ec2', region_name=region_name)
@@ -56,19 +57,24 @@ def teardown():
     print(delete_cluster())
     print(deregister_task_definition(family_name, family_version))
     delete_security_group()
+    detach_policy()
+    remove_role_from_instance_profile()
+    time.sleep(3)
     delete_role()
 
     #print(disassociate_iam_instance_profile())
-    #remove_role_from_instance_profile()
     print(delete_instance_profile())
 
 
     pass
 
 
-def delete_role():
+def detach_policy():
     role = iam_resource.Role(config.ec2_container_service_role)
     role.detach_policy(PolicyArn=config.aws_ec2_container_service_role)
+
+def delete_role():
+    role = iam_resource.Role(config.ec2_container_service_role)
     role.delete()
 
 
