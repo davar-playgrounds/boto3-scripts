@@ -31,7 +31,8 @@ def register_task_definition():
         containerDefinitions=[
             {
                 'name': 'container_name1',
-                'image': image,
+                #'image': image,
+                'image': '...',
                 'cpu': 123,
                 'memory': 123,
                 'memoryReservation': 123,
@@ -176,7 +177,7 @@ def create_security_group():
     return security_group_id
 
 
-def setup_1():
+def setup():
     print('create_cluster', create_cluster())
     print('register_task_definition', register_task_definition())
     security_group_id = create_security_group()
@@ -185,20 +186,8 @@ def setup_1():
     print('create_instance_profile', create_instance_profile())
     print(add_role_to_instance_profile())
 
-
-def setup_2():
-    security_group_id = 'sg-024d584ac7fc9ba56'
     response = run_instances([security_group_id])
     instance_id = response['Instances'][0]['InstanceId']
-
-    filters = [
-        {
-            'Name': 'Name',
-            'Values': [
-                config.instance_name,
-            ]
-        },
-    ]
 
     waiter = ec2.get_waiter('instance_running')
     waiter.wait(
@@ -210,10 +199,6 @@ def setup_2():
     print('instance_id: ', instance_id)
     print(associate_iam_instance_profile(instance_id))
     print(run_task())
-
-def setup():
-    setup_1()
-    #setup_2()
     pass
 
 

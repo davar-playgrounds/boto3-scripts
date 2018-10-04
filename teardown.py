@@ -16,9 +16,6 @@ family_version = config.family_version
 
 def disassociate_iam_instance_profile():
     print(ec2.describe_iam_instance_profile_associations())
-    #response = ec2.disassociate_iam_instance_profile(
-    #    AssociationId='iip-assoc-0fcd4a354ed1a4a33'
-    #)
 
 
 def delete_instance_profile():
@@ -53,6 +50,17 @@ def delete_security_group():
         GroupName=config.security_group_name
     )
 
+
+def detach_policy():
+    role = iam_resource.Role(config.ec2_container_service_role)
+    role.detach_policy(PolicyArn=config.aws_ec2_container_service_role)
+
+
+def delete_role():
+    role = iam_resource.Role(config.ec2_container_service_role)
+    role.delete()
+
+
 def teardown():
     print(delete_cluster())
     print(deregister_task_definition(family_name, family_version))
@@ -61,21 +69,8 @@ def teardown():
     remove_role_from_instance_profile()
     time.sleep(3)
     delete_role()
-
-    #print(disassociate_iam_instance_profile())
+    print(disassociate_iam_instance_profile())
     print(delete_instance_profile())
-
-
-    pass
-
-
-def detach_policy():
-    role = iam_resource.Role(config.ec2_container_service_role)
-    role.detach_policy(PolicyArn=config.aws_ec2_container_service_role)
-
-def delete_role():
-    role = iam_resource.Role(config.ec2_container_service_role)
-    role.delete()
 
 
 if __name__ == "__main__":
